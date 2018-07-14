@@ -148,13 +148,11 @@ class Model(object):
         initial_state=encoder_initial_state,
         dtype=tf.float32)
       # get final state: this is sentence encoding
-      print ('HELLO')
-      print(self.encoder_state)
-      if num_layers > 1:
-        encoder_state = tf.unstack(self.encoder_state, axis=0)
-        self.encoder_final_Layer_state = encoder_state[-1]
-      else:
-        self.encoder_final_Layer_state = self.encoder_state
+      #if num_layers > 1:
+      #  encoder_state = tf.unstack(self.encoder_state, axis=0)
+      #  self.encoder_final_Layer_state = encoder_state[-1]
+      #else:
+      #  self.encoder_final_Layer_state = self.encoder_state
       
   #------------------------- Setup Decoder ----------------------------------#    
   def setupDecoder(self,inputs,num_layers,is_training,dropout):
@@ -250,7 +248,9 @@ def train(train_data,
   with tf.Session() as sess:
       # start threads
       sess.run([init_op])
-      
+      coord = tf.train.Coordinator()
+      threads = tf.train.start_queue_runners(coord=coord)
+      saver = tf.train.Saver()
       for epoch in range(num_epochs):
           #assign new learning rate using exponential decay
           new_lr_decay = orig_decay ** max(epoch + 1 - max_lr_epoch, 0.0)
@@ -302,9 +302,9 @@ if args.run_opt == 1:
     decoder_inputdata,
     test_data, 
     vocabulary, 
-    num_layers=1, 
+    num_layers=2, 
     hidden_size= 50,
-    num_epochs=20, 
+    num_epochs=60, 
     batch_size=5,
     seq_max_len = max_len,
     num_steps=num_steps,
@@ -312,7 +312,7 @@ if args.run_opt == 1:
     learning_rate=1.0, 
     max_lr_epoch=10, 
     lr_decay=0.93,
-    print_iter=1)
+    print_iter=2)
 else:
   trained_model = args.data_path + "\\two-layer-lstm-medium-config-60-epoch-0p93-lr-decay-10-max-lr-38"
   test(trained_model, test_data, reversed_dictionary)
