@@ -242,7 +242,9 @@ def train(train_data,
 	learning_rate=1.0, 
 	max_lr_epoch=10, 
 	lr_decay=0.93, 
-	print_iter=20):
+	print_iter=20,
+	intermediate_model = None
+	):
 		# setup data and models
 		training_input = Input(batch_size=batch_size, num_steps=num_steps,seq_max_len = max_len,train_data=train_data,decoder_inputdata=decoder_inputdata,test_data=test_data)
 		m = Model(training_input, is_training=True, hidden_size=hidden_size, vocab_size=vocabulary,num_layers=num_layers,dropout =dropout)
@@ -254,6 +256,10 @@ def train(train_data,
 				coord = tf.train.Coordinator()
 				threads = tf.train.start_queue_runners(coord=coord)
 				saver = tf.train.Saver()
+				#restore interemediate model
+				if intermediate_model is not None:
+					saver.restore(sess, intermediate_model)
+					print("intermediate_model loaded")
 				for epoch in range(num_epochs):
 						#assign new learning rate using exponential decay
 						new_lr_decay = orig_decay ** max(epoch + 1 - max_lr_epoch, 0.0)
@@ -374,17 +380,19 @@ if args.run_opt == 1:
 		vocabulary, 
 		num_layers = 1, 
 		hidden_size = 128,
-		num_epochs = 1, 
+		num_epochs = 20, 
 		batch_size = 10,
 		seq_max_len = max_len,
 		num_steps= num_steps,
 		model_dir = model_dir,
-		useSGD = True,
-		learning_rate = 1.0, 
+		useSGD = False,
+		learning_rate = 0.5, 
 		dropout = 1.0,
 		max_lr_epoch = 10, 
 		lr_decay = 0.93,
-		print_iter = 100)
+		print_iter = 100,
+		intermediate_model = model_name
+		)
 else:
 		test(train_data,
 		decoder_inputdata,
