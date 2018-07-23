@@ -1,0 +1,6 @@
+model_checkpoint_path: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/trained_model.ckpt"
+all_model_checkpoint_paths: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/196model_intermediate.ckpt"
+all_model_checkpoint_paths: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/197model_intermediate.ckpt"
+all_model_checkpoint_paths: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/198model_intermediate.ckpt"
+all_model_checkpoint_paths: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/199model_intermediate.ckpt"
+all_model_checkpoint_paths: "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/trained_model.ckpt"

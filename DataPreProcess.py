@@ -19,7 +19,7 @@ class DataPreProcess:
 	def extractData(self,filename):
 		readData = []
 		#--------- Create Sentence list ----------------#
-		with codecs.open(filename, "rw+",encoding='UTF-8') as f:
+		with codecs.open(filename, "r+",encoding='UTF-8') as f:
 			readData = f.readlines()
 		if len(readData) == 0:
 			print(" Error with reading")
