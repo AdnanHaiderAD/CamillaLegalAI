@@ -26,12 +26,12 @@ def load_data(filename,n_words=10000):
 		num_steps = PreProcessObj.seq_len
 		max_len = PreProcessObj.max_len
 
-		print(train_data)
-		print("Number of sentences is %d ",train_data.shape[0])
-		print("Print decoder targets")
-		print(test_data)
-		print("Print decoder inputs")
-		print(decoder_inputdata)
+		#print(train_data)
+		print("Number of sentences is ",train_data.shape[0])
+		#print("Print decoder targets")
+		#print(test_data)
+		#print("Print decoder inputs")
+		#print(decoder_inputdata)
 		print("Print seq lens")
 		print(num_steps)
 		print(num_steps.shape)
@@ -78,7 +78,7 @@ class Input(object):
 #                       Create the main model
 class Model(object):
 		def __init__(self, inputObj, is_training, hidden_size, vocab_size, num_layers=1,
-								 dropout=0.5):
+								dropout=0.5,useSGD=True):
 				self.is_training = is_training
 				self.input_obj = inputObj
 				self.seq_max_len = inputObj.seq_max_len
@@ -96,14 +96,15 @@ class Model(object):
 				self.setupLossFunction(logits)
 				
 				# get the prediction accuracy
-				self.softmax_out = tf.nn.softmax(tf.reshape(logits, [-1, vocab_size]))
+				#self.softmax_out = tf.nn.softmax(tf.reshape(logits, [-1, vocab_size]))
+				self.softmax_out = tf.nn.softmax(logits)
 				self.predict = tf.cast(tf.argmax(self.softmax_out, axis=1), tf.int32)
 				correct_prediction = tf.equal(self.predict, tf.reshape(self.input_obj.targets, [-1]))
 				self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 				if not is_training:
 						return
 				else:
-						self.setupOptimisation()  
+						self.setupOptimisation(useSGD)  
 
 		#------------------------------------------------------------------------------------    
 
@@ -203,13 +204,15 @@ class Model(object):
 				self.cost = tf.reduce_mean(tf.reduce_sum(masked_losses, reduction_indices=1))
 
 		#------------------- Optimisation ------------------------------#
-		def setupOptimisation(self):
+		def setupOptimisation(self,useSGD):
 				self.learning_rate = tf.Variable(0.0, trainable=False)
 				tvars = tf.trainable_variables()
 				#clip gradients 
 				grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), 5)
-				optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-				# optimizer = tf.train.AdamOptimizer(self.learning_rate)
+				if (useSGD):
+					optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+				else:
+					optimizer = tf.train.AdamOptimizer(self.learning_rate)
 				self.train_op = optimizer.apply_gradients(
 						zip(grads, tvars),
 						global_step=tf.contrib.framework.get_or_create_global_step())
@@ -234,13 +237,15 @@ def train(train_data,
 	seq_max_len,
 	num_steps,
 	model_dir,
+	useSGD = True,
+	dropout = 0.5,
 	learning_rate=1.0, 
 	max_lr_epoch=10, 
 	lr_decay=0.93, 
 	print_iter=20):
 		# setup data and models
 		training_input = Input(batch_size=batch_size, num_steps=num_steps,seq_max_len = max_len,train_data=train_data,decoder_inputdata=decoder_inputdata,test_data=test_data)
-		m = Model(training_input, is_training=True, hidden_size=hidden_size, vocab_size=vocabulary,num_layers=num_layers)
+		m = Model(training_input, is_training=True, hidden_size=hidden_size, vocab_size=vocabulary,num_layers=num_layers,dropout =dropout)
 		init_op = tf.global_variables_initializer()
 		orig_decay = lr_decay
 		with tf.Session() as sess:
@@ -253,6 +258,7 @@ def train(train_data,
 						#assign new learning rate using exponential decay
 						new_lr_decay = orig_decay ** max(epoch + 1 - max_lr_epoch, 0.0)
 						m.assign_lr(sess, learning_rate * new_lr_decay)
+						print("Current learning rate ",learning_rate * new_lr_decay)
 						if num_layers > 1:
 							current_state = np.zeros((num_layers, 2, batch_size, m.hidden_size))
 						else:
@@ -261,14 +267,14 @@ def train(train_data,
 						for step in range(training_input.epoch_size):
 								# cost, _ = sess.run([m.cost, m.optimizer])
 								if step % print_iter != 0:
-										cost, _, current_state, final_state = sess.run([m.cost, m.train_op, m.encoder_state,m.encoder_final_Layer_state],
-																											feed_dict={m.encoder_init_state: current_state})
+										cost, _, current_state = sess.run([m.cost, m.train_op, m.encoder_state],
+																		feed_dict={m.encoder_init_state: current_state})
 										#print(final_state)
 								else:
 										seconds = (float((dt.datetime.now() - curr_time).seconds) / print_iter)
 										curr_time = dt.datetime.now()
 										cost, _, current_state, acc = sess.run([m.cost, m.train_op, m.encoder_state, m.accuracy],
-																													 feed_dict={m.encoder_init_state: current_state})
+																				feed_dict={m.encoder_init_state: current_state})
 										print("Epoch {}, Step {}, cost: {:.3f}, accuracy: {:.3f}, Seconds per step: {:.3f}".format(epoch,
 														step, cost, acc, seconds))
 
@@ -368,15 +374,17 @@ if args.run_opt == 1:
 		vocabulary, 
 		num_layers = 1, 
 		hidden_size = 128,
-		num_epochs = 200, 
-		batch_size = 5,
+		num_epochs = 1, 
+		batch_size = 10,
 		seq_max_len = max_len,
 		num_steps= num_steps,
 		model_dir = model_dir,
-		learning_rate = 2.0, 
+		useSGD = True,
+		learning_rate = 1.0, 
+		dropout = 1.0,
 		max_lr_epoch = 10, 
 		lr_decay = 0.93,
-		print_iter = 2)
+		print_iter = 100)
 else:
 		test(train_data,
 		decoder_inputdata,
@@ -384,14 +392,13 @@ else:
 		vocabulary, 
 		num_layers=1, 
 		hidden_size= 128,
-		batch_size=5,
+		batch_size=10,
 		seq_max_len = max_len,
 		num_steps= num_steps,
 		model_name = model_name,
 		)
 
 		
-
-
+# Example run: python Encoder.py 1 --data_path  /Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/data/sentences.txt  --model_dir /Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models
 
 

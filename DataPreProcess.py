@@ -50,8 +50,6 @@ class DataPreProcess:
 		for sentence in sentences:
 			target = sentence[:]
 			target.reverse()
-			print (sentence)
-			print (target)
 			sen_len = len(sentence)
 			seq_len.append(sen_len)
 			if sen_len == max_len :
@@ -61,8 +59,6 @@ class DataPreProcess:
 				decoder_inputs.append(decoder_input)
 			else :
 				diff_len = max_len - len(sentence)
-				print(max_len)
-				print(len(sentence))
 				padding = ['<\s>']*diff_len
 				sentence_extended =  sentence+padding
 				train_set.append(sentence_extended)
@@ -88,7 +84,6 @@ class DataPreProcess:
 		counter = counter.most_common(n_words)
 		count_pairs = sorted(counter, key=lambda x: (-x[1], x[0]))
 		words, _ = list(zip(*count_pairs))
-		print(words)
 		#--Add special symbols to word list		
 		_PAD = '<\s>'
 		_GO = '_GO'
