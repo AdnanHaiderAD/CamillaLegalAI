@@ -4,9 +4,6 @@ My personal research interests include sequence to sequence processing tasks.
 This is a rather wide subfield and is growing ever wider.
 I eventually want to solve the ability to reason with logic so that we can build platforms that can start to make strategic decisions across a wide array of situations.
 I also enjoy playing tennis, cooking, weight lifting.
-
-
-
 My favorite shows include the Big Bang Theory, Modern Family, Shark Tank and Dragon Ball.
 I am originally from New Jersey but currently live in California while my parents live in Georgia.
 I have a little brother who is in middle school and it is somewhat unfortunate that I am not able to be by his side when he is high school.

@@ -10,57 +10,63 @@ import DataPreProcess
 from tensorflow.python.layers.core import Dense
 
 #----------------------------- READ DATA ------------------------------------------------------#
-def load_data(filename,n_words=10000):
+def load_data(filename,batch_size, n_words=10000):
 		#           extract data 
-		PreProcessObj = DataPreProcess.DataPreProcess(filename)
+		PreProcessObj = DataPreProcess.DataPreProcess(filename,batch_size)
 		# Create Batches of sentences of equal length for training and target
 		trainSet,decodeInputSet,targetSet = PreProcessObj.makeInputAndLabels()
 		#       build dictionary
 		word_to_id = PreProcessObj.build_vocab(n_words=n_words) 
-		reversed_dictionary = dict(zip(word_to_id.values(), word_to_id.keys()))
 		#           Get training, decoder input  and target set
 		train_data = PreProcessObj.encodeSentencesToIds(trainSet,word_to_id)
 		decoder_inputdata = PreProcessObj.encodeSentencesToIds(decodeInputSet,word_to_id)
 		test_data = PreProcessObj.encodeSentencesToIds(targetSet,word_to_id)
 		vocabulary = PreProcessObj.VocabularySize 
+		sentence_ids = PreProcessObj.sentence_id
 		num_steps = PreProcessObj.seq_len
 		max_len = PreProcessObj.max_len
 
-		#print(train_data)
+		
 		print("Number of sentences is ",train_data.shape[0])
-		#print("Print decoder targets")
-		#print(test_data)
-		#print("Print decoder inputs")
-		#print(decoder_inputdata)
 		print("Print seq lens")
-		print(num_steps)
-		print(num_steps.shape)
-		print("print size of vocabulary")
-		print(vocabulary)
-		return train_data,decoder_inputdata,test_data, vocabulary, reversed_dictionary, num_steps,max_len
+		print("Max len of sentences")
+		print(max_len)
+		return train_data,decoder_inputdata,test_data, vocabulary, sentence_ids, num_steps,max_len
 
 #--------------------------------------  CREATE INPUT PIPELINE------------------------------------#
 class Input(object):
 		def __init__(self, batch_size,seq_max_len, num_steps, train_data,decoder_inputdata,test_data):
 				self.batch_size = batch_size
-				self.epoch_size = (train_data.shape[0]//batch_size)
 				self.seq_max_len = seq_max_len
-				print("epoch size is ")
-				print (self.epoch_size)
 				self.input_data,self.decoder_input, self.targets,self.num_steps = self.batch_producer(train_data=train_data, decoder_inputdata=decoder_inputdata,test_data=test_data, batch_size=batch_size, num_steps=num_steps)
 
 
 		def batch_producer(self,train_data,decoder_inputdata,test_data, batch_size, num_steps):
+				remainder = (train_data.shape[0] % batch_size)
+
+				padding  = np.zeros(((batch_size-remainder),self.seq_max_len))
+				if remainder > 0: 
+					decoder_inputdata = np.append(decoder_inputdata,padding,axis=0)
+					train_data = np.append(train_data,padding,axis=0)
+					test_data = np.append(test_data,padding,axis=0)
+					num_steps = np.append(num_steps, np.zeros((batch_size-remainder)),axis=0)
+				
 				train_fulldata = tf.convert_to_tensor(train_data, name="training_data",dtype=tf.int32)
 				test_fulldata  = tf.convert_to_tensor(test_data, name="test_data",dtype=tf.int32)
 				decode_inputfulldata = tf.convert_to_tensor(decoder_inputdata, name="test_data",dtype=tf.int32)
 				seq_lenList = tf.convert_to_tensor(num_steps, name="seq_len",dtype=tf.int32)
 				
 				epoch_size = (train_data.shape[0]//batch_size)
+				self.epoch_size = epoch_size
+				#decoder_inputUsed = decode_inputfulldata[ 0:epoch_size*batch_size, :]
+				#train_usedData = train_fulldata[0 : epoch_size*batch_size,:]
+				#test_usedData = test_fulldata[ 0:epoch_size*batch_size, :]
+				#seq_len = seq_lenList[0:epoch_size*batch_size]
+				
 				decoder_inputUsed = decode_inputfulldata[ 0:epoch_size*batch_size, :]
 				train_usedData = train_fulldata[0 : epoch_size*batch_size,:]
 				test_usedData = test_fulldata[ 0:epoch_size*batch_size, :]
-				seq_len = seq_lenList[0:epoch_size*batch_size]
+				seq_len = seq_lenList[0:epoch_size*batch_size]	
 
 				i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue()
 				x = train_usedData[i * batch_size:(i + 1) * batch_size,:]
@@ -209,6 +215,7 @@ class Model(object):
 				tvars = tf.trainable_variables()
 				#clip gradients 
 				grads, _ = tf.clip_by_global_norm(tf.gradients(self.cost, tvars), 5)
+
 				if (useSGD):
 					optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
 				else:
@@ -299,7 +306,7 @@ def train(train_data,
 #------------------------------------------ENCODE SENTENCES WITH TRAINED MODEL -----------------------------------------------------------------------------
 
 
-def test(train_data,
+def RunEncoder(train_data,
 	decoder_inputdata,
 	test_data,
 	vocabulary, 
@@ -308,10 +315,15 @@ def test(train_data,
 	batch_size,
 	seq_max_len,
 	num_steps,
-	model_name):
+	model_name,
+	sentence_ids, 
+	Output_dir
+	):
 	
 		test_input = Input(batch_size=batch_size, num_steps=num_steps,seq_max_len = max_len,train_data=train_data,decoder_inputdata=decoder_inputdata,test_data=test_data)
 		m = Model(test_input, is_training=False, hidden_size=hidden_size, vocab_size=vocabulary,num_layers=num_layers)
+		#Sentence_encode_output
+		encoded_output =[]
 		with tf.Session() as sess:
 				# start threads
 				coord = tf.train.Coordinator()
@@ -319,8 +331,6 @@ def test(train_data,
 				saver = tf.train.Saver()
 				# Model assumes LSTM structure
 				current_state = np.zeros((2, 2, m.batch_size, m.hidden_size))
-				#Sentence_encode_output
-				encoded_output =[]
 				if num_layers > 1:
 						current_state = np.zeros((num_layers, 2, batch_size, m.hidden_size))
 				else:
@@ -328,20 +338,19 @@ def test(train_data,
 				#restore saved model
 				saver.restore(sess, model_name)
 				curr_time = dt.datetime.now()
-				print("Number of batches")
-				print(test_input.epoch_size)
 				for step in range(test_input.epoch_size):
-						current_state, final_state = sess.run([m.encoder_state,m.encoder_final_Layer_state],
-																											feed_dict={m.encoder_init_state: current_state})
-						print
-						print(step)
-						print(final_state)
+						current_state, final_state = sess.run([m.encoder_state,m.encoder_final_Layer_state],feed_dict={m.encoder_init_state: current_state})
 						encoded_output.extend(final_state)
-			 	print("Output encoded sentences")
-				print(encoded_output)		
-				# close threads
+			 	# close threads
 				coord.request_stop()
 				coord.join(threads)
+
+		Encoded_sentences = [encoded_output[index] for index in sentence_ids]
+		Encoded_sentences = np.asmatrix(Encoded_sentences)
+		if Output_dir is not None:
+			np.save(Output_dir+'/encodings',Encoded_sentences)
+		print(Encoded_sentences)
+						
 
 			
 #------------------------------------------------------------------------------------------------------------#
@@ -351,27 +360,31 @@ def test(train_data,
 #--------- Default Data path ------------
 data_path = "/Users/mah90/TensorflowCode/Code/data/sentences.txt"
 model_dir = "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models"
-model_name = "/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/trained_model.ckpt"
+model_name = None
+encode_output_dir = None
+#"/Users/mah90/TensorflowCode/Encoder_DecoderCode/Camilla_codeBase/models/trained_model.ckpt"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('run_opt', type=int, default=1, help='An integer: 1 to train, 2 to test')
 parser.add_argument('--data_path', type=str, default=data_path, help='The full path of the training data')
 parser.add_argument('--model_dir', type=str, default=model_dir, help='Dir to save  models from')
 parser.add_argument('--model_name', type=str, default=model_name, help='Encoder model to load')
+parser.add_argument('--encode_output_dir', type=str, default=encode_output_dir, help='dir to dump encodings')
 args = parser.parse_args()
 
 
 # ---------------    
 if args.data_path:
 		data_path = args.data_path
-
 if args.model_dir:    
 		model_dir = args.model_dir
-
 if args.model_name:    
 		model_name = args.model_name
+if args.encode_output_dir:
+		encode_output_dir = args.encode_output_dir		
 
-train_data,decoder_inputdata,test_data, vocabulary, reversed_dictionary, num_steps,max_len = load_data(data_path)
+batch_size = 30		
+train_data,decoder_inputdata,test_data, vocabulary, sentence_ids, num_steps, max_len = load_data(data_path,batch_size)
 
 if args.run_opt == 1:
 		train(train_data,
@@ -380,8 +393,8 @@ if args.run_opt == 1:
 		vocabulary, 
 		num_layers = 1, 
 		hidden_size = 128,
-		num_epochs = 20, 
-		batch_size = 10,
+		num_epochs = 100, 
+		batch_size = batch_size,
 		seq_max_len = max_len,
 		num_steps= num_steps,
 		model_dir = model_dir,
@@ -394,16 +407,18 @@ if args.run_opt == 1:
 		intermediate_model = model_name
 		)
 else:
-		test(train_data,
+		RunEncoder(train_data,
 		decoder_inputdata,
 		test_data, 
 		vocabulary, 
 		num_layers=1, 
 		hidden_size= 128,
-		batch_size=10,
+		batch_size=batch_size,
 		seq_max_len = max_len,
 		num_steps= num_steps,
 		model_name = model_name,
+		sentence_ids = sentence_ids,
+		Output_dir = encode_output_dir
 		)
 
 		

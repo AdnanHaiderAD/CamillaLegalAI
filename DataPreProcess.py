@@ -16,26 +16,77 @@ import numpy as np
 class DataPreProcess:
 
 	#----------------------- Read Data and extract senstences and all words -----------------------#
-	def extractData(self,filename):
-		readData = []
-		#--------- Create Sentence list ----------------#
-		with codecs.open(filename, "r+",encoding='UTF-8') as f:
-			readData = f.readlines()
-		if len(readData) == 0:
-			print(" Error with reading")
-			exit(0)
-		sentences =[]
-		data = []
-		for line in readData:
-			line = re.sub(r"([.,!?\"':;)(])", "", line.strip('\n'))
-			if len(line) == 0:
-				continue  # handle empty lines
-			line = re.sub(r"'s", "", line) # this line doesnt seem to work properly
-			words = line.split()
-			sentences.append(words)
-			#----------- Creat word list ----------------------#
-			data.extend(words)
-		return sentences,data	
+	def extractData(self,filename,batchSize):
+			readData = []
+			#--------- Create Sentence list ----------------#
+			with codecs.open(filename, "r+",encoding='UTF-8') as f:
+					readData = f.readlines()
+			if len(readData) == 0:
+					print(" Error with reading")
+					exit(0)
+			
+			data = []
+			numOfSent = 0
+			sentenceSet =[]
+			numberofChunks = 0
+			maxChunkNum = 0
+			for line in readData:
+					line = re.sub(r"([.,!?\"':;)(])", "", line.strip('\n'))
+					if len(line) == 0:
+							continue  # handle empty lines
+					line = re.sub(r"'s", "", line) # this line doesnt seem to work properly
+					line = line.lower()
+					words = line.split()
+					data.extend(words) 
+					numOfSent+=1
+					# Restricting the length of sentences to a max ceiling length. This helps alleviate vanishing gradients
+					sentence =[ ]
+					chunkNum  = 0
+					if len(words) > 2:
+							chunks = len(words) //2
+							remainder = len(words) % 2
+							words_batch = words[0:chunks*2]
+							if remainder > 0:
+								words_remain = words[chunks*2:]
+								chunkNum +=1
+							chunkNum +=chunks
+							numberofChunks +=chunkNum
+							if chunkNum > maxChunkNum:
+								maxChunkNum = chunkNum
+							if chunks >1:
+									for i in range(chunks):
+										segment = words_batch[i*2:(i+1)*2]
+										sentence.append(segment)
+							else:
+									sentence.append(words_batch)
+							if remainder >0:    	
+								sentence.append(words_remain)    	
+							sentenceSet.append(sentence)  
+							continue
+					numberofChunks+=1        
+					sentence.append(words)        
+					sentenceSet.append(sentence)        
+			# Pack sentences such that chunks belonging to a sentence occupy the same position in batches		
+			sentence_id = [None]*len(sentenceSet)
+			sentences =[None]*numberofChunks
+			padding = [None]*(batchSize*maxChunkNum)
+			sentences = sentences + padding
+			count = 0
+			currentSentence = sentenceSet[count]
+			j = 0
+			for sentence in sentenceSet:
+				while sentences[j] is not None:
+					j+=1
+				for chunk_index, chunk in enumerate(sentence):
+					sentences[j + chunk_index*batchSize] = chunk
+				sentence_id[count] = j + (len(sentence)-1)*batchSize
+				count+=1	 	
+
+			for i in range(len(sentences)):
+				if sentences[i] is None:
+					sentences[i] = ['<\s>']	
+			return sentences,data,sentence_id
+
 
 	#-------------------- Create Batches of sentences of equal length for training and target -----------#
 	def makeInputAndLabels(self,sentences=None):
@@ -93,8 +144,8 @@ class DataPreProcess:
 		self.VocabularySize = len(vocab_list)
 		return word_to_id
 
-	def __init__(self,filename, n_words=10000):
-		self.sentences,self.data = self.extractData(filename)
+	def __init__(self,filename,batchSize, n_words=10000):
+		self.sentences,self.data,self.sentence_id = self.extractData(filename,batchSize)
 	
 
 
